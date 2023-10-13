@@ -39,7 +39,7 @@ func pullSpans(projectID, subID string) error {
 	ctx := context.Background()
 	client, err := pubsub.NewClient(ctx, projectID)
 	if err != nil {
-		log.Errorf("pubsub.NewClient: %w", err)
+		log.Errorf("pubsub.NewClient: %s", err)
 	} else {
 		log.Infoln("Connection to Pubsub successful!")
 	}
@@ -97,7 +97,7 @@ func insertRows(projectID string, resourceSpans *v1.ResourceSpans, ctx context.C
 
 	client, err := bigquery.NewClient(ctx, projectID) //Bigquery client init, context from the previous loop is used
 	if err != nil {
-		log.Errorf("bigquery.NewClient: %w", err)
+		log.Errorf("bigquery.NewClient: %s", err)
 	}
 	defer client.Close() //Defer to SIGINT, ie when the pod or process is terminated
 
