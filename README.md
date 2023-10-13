@@ -1,13 +1,13 @@
 ### OTel Span protobuf deserializer to BigQuery
 
-This script does the following:
+This program does the following:
 1. Reads a OTel produced pub/sub message encoded in a protobuf binary format
-2. Unmarshals it into a golang native data structure
+2. Unmarshals it into a golang native data structure type
 3. Sends it to a BigQuery dataset
 
-This script was written to be deployed as a cloud function reading from a pub/sub topic. This is necessary to gather span data in bigquery. 
+This program was written to be deployed as a service reading from a pub/sub topic. This is necessary to gather span data in bigquery. 
 
-The schema for the protobuf data structures are stored in the `/pb` folder
+The schema for the protobuf data structures are stored in the `/v1` folder
 
 Resources and additional information:
 - https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/exporter/googlecloudpubsubexporter
