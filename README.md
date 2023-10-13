@@ -1,3 +1,5 @@
+[![otel-span-bigquery](https://github.com/f4tal-err0r/otel-span-bigquery/actions/workflows/otel-span-bigquery.yml/badge.svg)](https://github.com/f4tal-err0r/otel-span-bigquery/actions/workflows/otel-span-bigquery.yml)
+
 ### OTel Span protobuf deserializer to BigQuery
 
 This program does the following:
