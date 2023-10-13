@@ -33,7 +33,7 @@ type Rows struct {
 
 //Limits adding spans to only relevant span names. You can add to this array to add additional spans
 //Does not have to be exact match
-var whitelistSpan []string = []string{"FilterableKafkaMessageListener.onMessage", "engine_workflow_execution process", "_workflow-execution-response process"}
+var whitelistSpan []string = []string{"send", "process"}
 
 func pullSpans(projectID, subID string) error {
 	ctx := context.Background()
@@ -132,7 +132,7 @@ func insertRows(projectID string, resourceSpans *v1.ResourceSpans, ctx context.C
 					Duration:  int64(spans.GetEndTimeUnixNano()-spans.GetStartTimeUnixNano()) / 1e6, //convert ns to ms
 					Service:   resourceAttrs["service.name"],
 					Name:      spans.Name,
-					TraceId:   spanAttrs["X-BC-TraceId"],
+					TraceId:   spanAttrs["X-TraceId"],
 				})
 			}
 		}
