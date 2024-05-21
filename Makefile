@@ -6,7 +6,7 @@ OTEL_DOCKER_PROTOBUF ?= otel/build-protobuf:0.9.0
 BUF_DOCKER ?= bufbuild/buf:1.7.0
 
 ## Test environment variables
-export PROJECT := bettercloud-non-prod
+export PROJECT := gcp_project
 export SUBID := otel_to_bq-test
 export DATASETID := otel_spans_nonprod
 export TABLEID := testspans2
