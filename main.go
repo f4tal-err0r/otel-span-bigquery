@@ -71,9 +71,10 @@ func (c *Clients) pullSpans(ctx context.Context, projectID, subID string) error 
 	// defer cancel()
 
 	var received int32
-	ExportTraceServiceRequest := &pb.ExportTraceServiceRequest{}
 	log.Infof("Beginning to recieve Pubsub messages from subscription %s", subID)
 	err := sub.Receive(ctx, func(_ context.Context, msg *pubsub.Message) {
+		req := &pb.ExportTraceServiceRequest{}
+
 		if msg.Attributes["ce-type"] == "org.opentelemetry.otlp.traces.v1" && msg.Data != nil {
 
 			//deferred function to handle any panics from marshalling null data
@@ -84,12 +85,14 @@ func (c *Clients) pullSpans(ctx context.Context, projectID, subID string) error 
 				}
 			}()
 
-			err := proto.Unmarshal(msg.Data, ExportTraceServiceRequest) //This is where protobuf is deserializing the binary data in the pubsub message and marshalling it into an object
-			if err != nil {
-				log.Print(err)
+			if err := proto.Unmarshal(msg.Data, req); err != nil { //This is where protobuf is deserializing the binary data in the pubsub message and marshalling it into an object
+				log.Errorf("Failed to unmarshal message data: %v", err)
+				msg.Nack()
+				return
 			}
-			atomic.AddInt32(&received, 1)                                     //Count for possible monitoring
-			for _, rs := range ExportTraceServiceRequest.GetResourceSpans() { //Iterate over ResourceSpans array in the object and send to the inserter
+
+			atomic.AddInt32(&received, 1)               //Count for possible monitoring
+			for _, rs := range req.GetResourceSpans() { //Iterate over ResourceSpans array in the object and send to the inserter
 				if err := insertRows(c.BQClient, projectID, rs, ctx); err != nil {
 					log.Error(err)
 				}
