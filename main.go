@@ -72,7 +72,7 @@ func (c *Clients) pullSpans(ctx context.Context, projectID, subID string) error 
 
 	var received int32
 	log.Infof("Beginning to recieve Pubsub messages from subscription %s", subID)
-	err := sub.Receive(ctx, func(_ context.Context, msg *pubsub.Message) {
+	err := sub.Receive(ctx, func(ctx context.Context, msg *pubsub.Message) {
 		req := &pb.ExportTraceServiceRequest{}
 
 		if msg.Attributes["ce-type"] == "org.opentelemetry.otlp.traces.v1" && msg.Data != nil {
