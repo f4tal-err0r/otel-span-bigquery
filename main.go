@@ -146,11 +146,11 @@ func insertRows(bqclient *bigquery.Client, projectID string, resourceSpans *v1.R
 	}
 
 	//This will iterate over the previously referenced Spans and insert the Row to BigQuery
-	for _, row := range bqRows.Spans {
-		if err := inserter.Put(ctx, row); err != nil {
+	if len(bqRows.Spans) > 0 {
+		if err := inserter.Put(ctx, bqRows.Spans); err != nil {
 			return err
 		} else {
-			log.Debugf("INFO: spanID %x sent to bigquery instance %s:%s:%s successfully\n", row.SpanID, projectID, datasetID, tableID)
+			log.Debugf("INFO: %d spans sent to bigquery instance %s:%s:%s successfully\n", len(bqRows.Spans), projectID, datasetID, tableID)
 		}
 	}
 
