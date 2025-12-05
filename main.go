@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	pb "main/v1"
 	"os"
+	"os/signal"
 	"sync/atomic"
 
 	"cloud.google.com/go/bigquery"
@@ -15,8 +16,8 @@ import (
 	"golang.org/x/exp/slices"
 )
 
-//This is the Bigquery row as a golang object, this is what the inserter takes in order to queue a row
-//If you want to add a new column, step one is adding it to this struct and type
+// This is the Bigquery row as a golang object, this is what the inserter takes in order to queue a row
+// If you want to add a new column, step one is adding it to this struct and type
 type Item struct {
 	SpanID    string
 	Timestamp int64
@@ -26,26 +27,38 @@ type Item struct {
 	TraceId   string
 }
 
-//This is simply to handle batching of those rows
+// This is simply to handle batching of those rows
 type Rows struct {
 	Spans []*Item
 }
 
-//Limits adding spans to only relevant span names. You can add to this array to add additional spans
-//Does not have to be exact match
+type Clients struct {
+	BQClient  *bigquery.Client
+	PubClient *pubsub.Client
+}
+
+// Limits adding spans to only relevant span names. You can add to this array to add additional spans
+// Does not have to be exact match
 var whitelistSpan []string = []string{"send", "process"}
 
-func pullSpans(projectID, subID string) error {
-	ctx := context.Background()
-	client, err := pubsub.NewClient(ctx, projectID)
+func NewClients(ctx context.Context, projectID string) (*Clients, error) {
+	bqClient, err := bigquery.NewClient(ctx, projectID)
 	if err != nil {
-		log.Errorf("pubsub.NewClient: %s", err)
-	} else {
-		log.Infoln("Connection to Pubsub successful!")
+		return nil, err
 	}
-	defer client.Close()
+	pubClient, err := pubsub.NewClient(ctx, projectID)
+	if err != nil {
+		bqClient.Close()
+		return nil, err
+	}
+	return &Clients{
+		BQClient:  bqClient,
+		PubClient: pubClient,
+	}, nil
+}
 
-	sub := client.Subscription(subID)
+func (c *Clients) pullSpans(ctx context.Context, projectID, subID string) error {
+	sub := c.PubClient.Subscription(subID)
 
 	sub.ReceiveSettings.Synchronous = false
 	sub.ReceiveSettings.NumGoroutines = 16
@@ -60,7 +73,7 @@ func pullSpans(projectID, subID string) error {
 	var received int32
 	ExportTraceServiceRequest := &pb.ExportTraceServiceRequest{}
 	log.Infof("Beginning to recieve Pubsub messages from subscription %s", subID)
-	err = sub.Receive(ctx, func(_ context.Context, msg *pubsub.Message) {
+	err := sub.Receive(ctx, func(_ context.Context, msg *pubsub.Message) {
 		if msg.Attributes["ce-type"] == "org.opentelemetry.otlp.traces.v1" && msg.Data != nil {
 
 			//deferred function to handle any panics from marshalling null data
@@ -77,7 +90,7 @@ func pullSpans(projectID, subID string) error {
 			}
 			atomic.AddInt32(&received, 1)                                     //Count for possible monitoring
 			for _, rs := range ExportTraceServiceRequest.GetResourceSpans() { //Iterate over ResourceSpans array in the object and send to the inserter
-				if err := insertRows(projectID, rs, ctx); err != nil {
+				if err := insertRows(c.BQClient, projectID, rs, ctx); err != nil {
 					log.Error(err)
 				}
 			}
@@ -91,17 +104,11 @@ func pullSpans(projectID, subID string) error {
 	return nil
 }
 
-func insertRows(projectID string, resourceSpans *v1.ResourceSpans, ctx context.Context) error {
+func insertRows(bqclient *bigquery.Client, projectID string, resourceSpans *v1.ResourceSpans, ctx context.Context) error {
 	datasetID := os.Getenv("DATASETID")
 	tableID := os.Getenv("TABLEID")
 
-	client, err := bigquery.NewClient(ctx, projectID) //Bigquery client init, context from the previous loop is used
-	if err != nil {
-		log.Errorf("bigquery.NewClient: %s", err)
-	}
-	defer client.Close() //Defer to SIGINT, ie when the pod or process is terminated
-
-	inserter := client.Dataset(datasetID).Table(tableID).Inserter() //Init Dataset inserter
+	inserter := bqclient.Dataset(datasetID).Table(tableID).Inserter() //Init Dataset inserter
 
 	//Resource attributes marshalling into map for reference
 	resourceAttrs := make(map[string]string)
@@ -156,10 +163,26 @@ func main() {
 
 	name, _ := os.Hostname()
 
+	ctx := context.Background()
+	c, err := NewClients(ctx, PROJECT)
+	if err != nil {
+		log.Fatalf("Failed to initialize clients: %v", err)
+	}
+
 	log.Infof("Starting %s...", name)
 	log.Info("NOTE: Logs here will not show successful bigquery inputs. For that, change LOG_LEVEL to debug in the environment variables")
-	err := pullSpans(PROJECT, SUBID)
+	err = c.pullSpans(ctx, PROJECT, SUBID)
 	if err != nil {
 		log.Error(err)
 	}
+
+	// Gracefully close BigQuery client on SIGINT
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, os.Interrupt)
+	go func() {
+		<-sigCh
+		c.PubClient.Close()
+		c.BQClient.Close()
+		os.Exit(0)
+	}()
 }
