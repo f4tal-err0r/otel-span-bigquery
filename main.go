@@ -164,7 +164,10 @@ func main() {
 	PROJECT := os.Getenv("PROJECT")
 	SUBID := os.Getenv("SUBID")
 
-	name, _ := os.Hostname()
+	name, err := os.Hostname()
+	if err != nil {
+		log.Fatalf("Failed to get hostname: %v", err)
+	}
 
 	ctx := context.Background()
 	c, err := NewClients(ctx, PROJECT)
